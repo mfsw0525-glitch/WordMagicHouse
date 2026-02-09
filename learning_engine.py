@@ -64,24 +64,46 @@ class LearningEngine:
 
     def submit_answer(self, word_id, is_correct):
         """
-        Update local session mastery and SYNC with Feishu.
-        - If Wrong: Mark in Feishu immediately as reset (interval=1).
+        Update local session mastery and DEFER Feishu sync.
+        Store pending updates to batch later for faster UI response.
         """
         word_obj = next((w for w in self.session_words if w['id'] == word_id), None)
         current_interval = word_obj.get('interval', 0) if word_obj else 0
 
         if is_correct:
             self.mastery_map[word_id] += 1
-            # If mastered in session (streak 2), move forward in Ebbinghaus
+            # Queue update for later
             if self.mastery_map[word_id] >= 2:
-                dm.update_word_progress(word_id, True, current_interval)
+                self._queue_update(word_id, True, current_interval)
         else:
-            self.mastery_map[word_id] = 0 # Reset streak
+            self.mastery_map[word_id] = 0
             self.wrong_history[word_id] += 1
-            # SYNC WRONG IMMEDIATELY: Reset to 1 day in Feishu so it appears tomorrow
-            dm.update_word_progress(word_id, False, current_interval)
+            # Queue update for later
+            self._queue_update(word_id, False, current_interval)
             
         return self.mastery_map[word_id] >= 2
+    
+    def _queue_update(self, word_id, is_correct, interval):
+        """Store pending updates to process later"""
+        if not hasattr(self, 'pending_updates'):
+            self.pending_updates = []
+        self.pending_updates.append({
+            'word_id': word_id,
+            'is_correct': is_correct,
+            'interval': interval
+        })
+    
+    def flush_pending_updates(self):
+        """Process all pending updates to Feishu"""
+        if not hasattr(self, 'pending_updates'):
+            return
+        for update in self.pending_updates:
+            dm.update_word_progress(
+                update['word_id'], 
+                update['is_correct'], 
+                update['interval']
+            )
+        self.pending_updates = []
 
 # Global Engine
 le = LearningEngine()

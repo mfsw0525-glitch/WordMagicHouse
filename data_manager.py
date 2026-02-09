@@ -175,12 +175,10 @@ class DataManager:
 
     def update_word_progress(self, record_id, is_correct, current_interval):
         """
-        Update word progress based on Ebbinghaus interval.
-        - If Correct: move to next interval.
-        - If Wrong: reset interval to 1 day immediately.
+        Update word progress. Optimizing to reduce UI lag.
         """
         if is_correct:
-            if current_interval == 0: # New word
+            if current_interval == 0: 
                 new_interval = 1
             elif current_interval in REVIEW_INTERVALS:
                 idx = REVIEW_INTERVALS.index(current_interval)
@@ -188,7 +186,6 @@ class DataManager:
             else:
                 new_interval = max(1, current_interval * 2)
         else:
-            # Mistake logic: reset to 1 day for next review
             new_interval = 1
             
         next_date = datetime.now() + timedelta(days=new_interval)
@@ -199,8 +196,11 @@ class DataManager:
             "next_review_time": next_ts,
             "interval": new_interval
         }
-        self._request("PUT", f"tables/{self.table_id}/records/{record_id}", json_data={"fields": fields})
-        return new_interval
+        
+        # Performance: We call this, but the UI should show feedback FIRST.
+        # In Streamlit, everything is sequential. We will try to make this call
+        # but the actual "lag" the user sees is the wait for this PUT request.
+        return self._request("PUT", f"tables/{self.table_id}/records/{record_id}", json_data={"fields": fields})
 
     def send_bot_notification(self, session_type, count, streak=0):
         """Send a formatted message to Feishu Webhook"""

@@ -30,18 +30,15 @@ import random
 # --- Helper Functions ---
 
 def check_answer(target_id, selected_id):
+    # Instant visual feedback - no API calls here
     if target_id == selected_id:
-        mastered = le.submit_answer(target_id, True)
-        msg = "Correct!"
-        if mastered: msg += "<br><span style='font-size:1.2rem'>Mastered! 🌟</span>"
-        st.session_state.feedback = (True, msg)
-        st.toast("Great Job! 🎉", icon="✅")
+        st.session_state.feedback = (True, "Correct!")
     else:
-        le.submit_answer(target_id, False)
-        err_msgs = ["Try Again! 😅", "Not that one! 🛑", "Keep trying! 💪", "Give it another shot! 🤔", "Oops, wrong one! 🙊"]
-        msg = random.choice(err_msgs)
-        st.session_state.feedback = (False, msg)
-        st.toast(msg, icon="❌")
+        err_msgs = ["Try Again! 😅", "Not that one! 🛑", "Keep trying! 💪"]
+        st.session_state.feedback = (False, random.choice(err_msgs))
+    
+    # Update local state only (instant)
+    le.submit_answer(target_id, target_id == selected_id)
     st.rerun()
 
 def check_spelling(target_id, target_word, user_input):
@@ -108,13 +105,16 @@ def home_page():
             <div style="font-size:0.9rem; opacity:0.7; margin-bottom:10px;">Goal: {WORDS_PER_SESSION} words</div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("🚀 Start Learning"):
-            count = le.start_new_session(WORDS_PER_SESSION)
-            if count > 0:
-                st.session_state.page = 'learning'
-                st.rerun()
-            else:
-                st.warning("No new words available!")
+        cols = st.columns([1, 2, 1])
+        with cols[1]:
+            if st.button("🚀 Start Learning", use_container_width=True):
+                with st.spinner("Loading words..."):
+                    count = le.start_new_session(WORDS_PER_SESSION)
+                    if count > 0:
+                        st.session_state.page = 'learning'
+                        st.rerun()
+                    else:
+                        st.warning("No new words available!")
 
     with c4:
         st.markdown(f"""
@@ -123,13 +123,16 @@ def home_page():
             <div style="font-size:0.9rem; opacity:0.7; margin-bottom:10px;">{review_cnt} due today</div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("🔄 Start Review"):
-            if review_cnt > 0:
-                count = le.start_review_session()
-                st.session_state.page = 'learning'
-                st.rerun()
-            else:
-                st.info("No reviews due! 🎉")
+        cols = st.columns([1, 2, 1])
+        with cols[1]:
+            if st.button("🔄 Start Review", use_container_width=True):
+                with st.spinner("Loading reviews..."):
+                    if review_cnt > 0:
+                        count = le.start_review_session()
+                        st.session_state.page = 'learning'
+                        st.rerun()
+                    else:
+                        st.info("No reviews due! 🎉")
 
 def learning_page():
     # Check if session is done
@@ -162,35 +165,43 @@ def learning_page():
         render_feedback(is_correct, msg)
 
         if is_correct:
-            if st.button("Next ➡️", key="next_btn"):
-                st.session_state.current_question = None
-                st.session_state.feedback = None
-                st.rerun()
+            cols = st.columns([1, 1, 1])
+            with cols[1]:
+                if st.button("Next ➡️", key="next_btn", use_container_width=True):
+                    st.session_state.current_question = None
+                    st.session_state.feedback = None
+                    st.rerun()
             return # Stop rendering inputs if correct
             
         else:
             if "Game Over" in msg:
-                 if st.button("Next ➡️", key="next_btn_fail"):
-                    st.session_state.current_question = None
-                    st.session_state.feedback = None
-                    st.rerun()
+                 cols = st.columns([1, 1, 1])
+                 with cols[1]:
+                    if st.button("Next ➡️", key="next_btn_fail", use_container_width=True):
+                        st.session_state.current_question = None
+                        st.session_state.feedback = None
+                        st.rerun()
                  return
 
     # Input Area
     if q_type == 'choice':
-        st.write("Which word is this?")
-        cols = st.columns(2)
+        st.markdown('<div class="center-text">Which word is this?</div>', unsafe_allow_html=True)
+        st.write("")
+        cols = st.columns([1, 2, 2, 1])
         for i, opt in enumerate(q['options']):
-            with cols[i % 2]:
-                if st.button(opt['word'], key=f"opt_{i}"):
+            col_idx = 1 if i % 2 == 0 else 2
+            with cols[col_idx]:
+                if st.button(opt['word'], key=f"opt_{i}", use_container_width=True):
                     check_answer(word['id'], opt['id'])
                     
     elif q_type == 'matching': # Fallback to choice
-        st.write("Match the correct word!")
-        cols = st.columns(2)
+        st.markdown('<div class="center-text">Match the correct word!</div>', unsafe_allow_html=True)
+        st.write("")
+        cols = st.columns([1, 2, 2, 1])
         for i, opt in enumerate(q['options']):
-            with cols[i % 2]:
-                if st.button(opt['word'], key=f"match_{i}"):
+            col_idx = 1 if i % 2 == 0 else 2
+            with cols[col_idx]:
+                if st.button(opt['word'], key=f"match_{i}", use_container_width=True):
                     check_answer(word['id'], opt['id'])
 
     elif q_type.startswith('spelling'):
@@ -212,6 +223,10 @@ def summary_page():
     render_sidebar_stats(None, 0, 0)
     render_header("🎉 Session Complete!")
     st.balloons()
+    
+    # Flush all pending updates to Feishu
+    with st.spinner("Saving progress..."):
+        le.flush_pending_updates()
     
     # Send Notification if not sent
     if not st.session_state.notification_sent:
