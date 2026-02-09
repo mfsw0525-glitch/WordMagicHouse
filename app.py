@@ -14,8 +14,7 @@ inject_custom_css()
 if 'page' not in st.session_state:
     st.session_state.page = 'home'
 if 'user_stats' not in st.session_state:
-    with st.spinner("Preparing your study room... 🏰"):
-        st.session_state.user_stats = dm.get_user_stats()
+    st.session_state.user_stats = dm.get_user_stats()
 if 'current_question' not in st.session_state:
     st.session_state.current_question = None
 if 'feedback' not in st.session_state:
@@ -73,30 +72,26 @@ def check_spelling(target_id, target_word, user_input):
 
 # --- Pages ---
 
-@st.cache_data(ttl=600) # Cache for 10 mins, or until manually cleared
+@st.cache_data(ttl=1800)  # Cache for 30 mins (stats change slowly)
 def get_cached_stats():
     return dm.get_stats()
 
 def home_page():
-    
-    # Render Sidebar with current global stats
-    with st.spinner("Connecting..."):
-        total, new_cnt, review_cnt, learned_cnt = get_cached_stats()
+    total, new_cnt, review_cnt, learned_cnt = get_cached_stats()
     
     render_sidebar_stats(None, 0, 0)
-    
     render_header("Word Magic House")
     
-    # Modern Layout: 2 Big Cards
+    # Stats Cards
     c1, c2 = st.columns(2)
     with c1:
         render_stat_card("Total Words", total)
     with c2:
         render_stat_card("Mastered", learned_cnt)
     
-    st.write("") # Spacer
+    st.write("")
     
-    # Action Area
+    # Action Buttons
     c3, c4 = st.columns(2)
     with c3:
         st.markdown(f"""
@@ -108,13 +103,12 @@ def home_page():
         cols = st.columns([1, 2, 1])
         with cols[1]:
             if st.button("🚀 Start Learning", use_container_width=True):
-                with st.spinner("Loading words..."):
-                    count = le.start_new_session(WORDS_PER_SESSION)
-                    if count > 0:
-                        st.session_state.page = 'learning'
-                        st.rerun()
-                    else:
-                        st.warning("No new words available!")
+                count = le.start_new_session(WORDS_PER_SESSION)
+                if count > 0:
+                    st.session_state.page = 'learning'
+                    st.rerun()
+                else:
+                    st.warning("No new words available!")
 
     with c4:
         st.markdown(f"""
@@ -126,13 +120,12 @@ def home_page():
         cols = st.columns([1, 2, 1])
         with cols[1]:
             if st.button("🔄 Start Review", use_container_width=True):
-                with st.spinner("Loading reviews..."):
-                    if review_cnt > 0:
-                        count = le.start_review_session()
-                        st.session_state.page = 'learning'
-                        st.rerun()
-                    else:
-                        st.info("No reviews due! 🎉")
+                if review_cnt > 0:
+                    le.start_review_session()
+                    st.session_state.page = 'learning'
+                    st.rerun()
+                else:
+                    st.info("No reviews due! 🎉")
 
 def learning_page():
     # Check if session is done
@@ -238,7 +231,7 @@ def summary_page():
     
     if st.button("🏠 Back Home"):
         st.session_state.page = 'home'
-        st.session_state.notification_sent = False # Reset for next session
+        st.session_state.notification_sent = False
         st.rerun()
 
 # --- Pages ---
