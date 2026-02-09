@@ -2,6 +2,7 @@
 import requests
 import logging
 import random
+import threading
 from datetime import datetime, timedelta
 from config import *
 
@@ -89,49 +90,80 @@ class DataManager:
     def get_stats(self):
         """
         Returns (total_words, new_words, review_words, mastered_words)
-        ULTRA-OPTIMIZED: Single API call, client-side filtering (4x faster).
+        ULTRA-OPTIMIZED: Efficiently handles multi-page vocab.
         """
-        # Fetch all records with minimal fields (much faster than 4 separate calls)
-        res = self._request("GET", f"tables/{self.table_id}/records", params={
-            "field_names": '["status","next_review_time"]',
-            "page_size": 500  # Covers typical vocab size
-        })
-        
-        if not res or res.get('code') != 0:
-            return 0, 0, 0, 0
-        
-        total = res['data']['total']
-        items = res['data'].get('items', [])
-        
+        total = 0
         new_cnt = 0
         learned_cnt = 0
         review_cnt = 0
+        
         now_ts = int(datetime.now().timestamp() * 1000)
+        page_token = ""
         
-        for item in items:
-            status = item['fields'].get('status', 0)
-            if status == 0:
-                new_cnt += 1
-            else:
-                learned_cnt += 1
-                next_time = item['fields'].get('next_review_time', 0)
-                if next_time <= now_ts:
-                    review_cnt += 1
+        # We might need multiple pages if vocab > 500
+        while True:
+            params = {
+                "field_names": '["status","next_review_time"]',
+                "page_size": 500
+            }
+            if page_token: params["page_token"] = page_token
+            
+            res = self._request("GET", f"tables/{self.table_id}/records", params=params)
+            if not res or res.get('code') != 0: break
+            
+            data = res['data']
+            total = data['total'] # Accurate total from metadata
+            items = data.get('items', [])
+            
+            for item in items:
+                # Robust status check (handle string '0' or int 0)
+                status_raw = item['fields'].get('status', 0)
+                try:
+                    status = int(status_raw)
+                except (ValueError, TypeError):
+                    status = 0
+                
+                if status == 0:
+                    new_cnt += 1
+                else:
+                    learned_cnt += 1
+                    next_time = item['fields'].get('next_review_time', 0)
+                    if next_time <= now_ts:
+                        review_cnt += 1
+            
+            if not data.get('has_more'): break
+            page_token = data.get('page_token')
+            
+        # If we failed to get total, use counter
+        if total == 0: total = new_cnt + learned_cnt
         
+        return total, new_cnt, review_cnt, learned_cnt
         return total, new_cnt, review_cnt, learned_cnt
 
     def _fetch_all_learned(self):
-        """Helper to fetch all records with status > 0 using pagination"""
+        """Helper to fetch all records with status != 0 using pagination"""
         all_items = []
         page_token = ""
         while True:
-            params = {"filter": 'CurrentValue.[status]>0', "page_size": 500}
+            # Note: Using filter status >= 0 to get everything and then filter in Python
+            # because string '0' vs int 0 issues in Bitable filter syntax
+            params = {"page_size": 500}
             if page_token: params["page_token"] = page_token
             
             res = self._request("GET", f"tables/{self.table_id}/records", params=params)
             if res and res.get('code') == 0:
                 data = res['data']
-                all_items.extend(data.get('items', []))
+                items = data.get('items', [])
+                for item in items:
+                    raw_status = item['fields'].get('status', 0)
+                    try:
+                        status = int(raw_status)
+                    except (ValueError, TypeError):
+                        status = 0
+                    
+                    if status != 0:
+                        all_items.append(item)
+                
                 if not data.get('has_more'): break
                 page_token = data.get('page_token')
             else:
@@ -214,10 +246,19 @@ class DataManager:
             "interval": new_interval
         }
         
-        # Performance: We call this, but the UI should show feedback FIRST.
-        # In Streamlit, everything is sequential. We will try to make this call
-        # but the actual "lag" the user sees is the wait for this PUT request.
-        return self._request("PUT", f"tables/{self.table_id}/records/{record_id}", json_data={"fields": fields})
+        self._request("PUT", f"tables/{self.table_id}/records/{record_id}", json_data={"fields": fields})
+        return new_interval
+
+    def update_word_progress_async(self, record_id, is_correct, current_interval):
+        """Spawns a background thread to update Feishu without blocking the UI"""
+        import threading
+        thread = threading.Thread(
+            target=self.update_word_progress,
+            args=(record_id, is_correct, current_interval)
+        )
+        thread.daemon = True # Ensure it doesn't block app exit
+        thread.start()
+        return True
 
     def send_bot_notification(self, session_type, count, streak=0):
         """Send a formatted message to Feishu Webhook"""

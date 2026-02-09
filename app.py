@@ -217,10 +217,6 @@ def summary_page():
     render_header("🎉 Session Complete!")
     st.balloons()
     
-    # Flush all pending updates to Feishu
-    with st.spinner("Saving progress..."):
-        le.flush_pending_updates()
-    
     # Send Notification if not sent
     if not st.session_state.notification_sent:
         streak = st.session_state.user_stats.get('streak_days', 1)

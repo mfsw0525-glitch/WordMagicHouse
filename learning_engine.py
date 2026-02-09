@@ -64,46 +64,28 @@ class LearningEngine:
 
     def submit_answer(self, word_id, is_correct):
         """
-        Update local session mastery and DEFER Feishu sync.
-        Store pending updates to batch later for faster UI response.
+        Update local session mastery and ASYNC Feishu sync.
+        Saves progress immediately in the background for "done" words.
         """
         word_obj = next((w for w in self.session_words if w['id'] == word_id), None)
         current_interval = word_obj.get('interval', 0) if word_obj else 0
 
         if is_correct:
             self.mastery_map[word_id] += 1
-            # Queue update for later
+            # If mastered (streak 2), save progress to Feishu in background
             if self.mastery_map[word_id] >= 2:
-                self._queue_update(word_id, True, current_interval)
+                dm.update_word_progress_async(word_id, True, current_interval)
         else:
             self.mastery_map[word_id] = 0
             self.wrong_history[word_id] += 1
-            # Queue update for later
-            self._queue_update(word_id, False, current_interval)
+            # If wrong, reset interval in Feishu immediately in background
+            dm.update_word_progress_async(word_id, False, current_interval)
             
         return self.mastery_map[word_id] >= 2
     
-    def _queue_update(self, word_id, is_correct, interval):
-        """Store pending updates to process later"""
-        if not hasattr(self, 'pending_updates'):
-            self.pending_updates = []
-        self.pending_updates.append({
-            'word_id': word_id,
-            'is_correct': is_correct,
-            'interval': interval
-        })
-    
     def flush_pending_updates(self):
-        """Process all pending updates to Feishu"""
-        if not hasattr(self, 'pending_updates'):
-            return
-        for update in self.pending_updates:
-            dm.update_word_progress(
-                update['word_id'], 
-                update['is_correct'], 
-                update['interval']
-            )
-        self.pending_updates = []
+        """No longer needed with background sync, but kept for compatibility"""
+        pass
 
 # Global Engine
 le = LearningEngine()

@@ -42,8 +42,20 @@ def reset_all_words():
     print("✨ 全部单词已重置为“未学习”状态！女儿现在可以从头开始了。")
 
 if __name__ == "__main__":
-    confirm = input("⚠️  确定要重置所有学习进度吗？这将不可逆！(y/n): ")
-    if confirm.lower() == 'y':
+    import sys
+    
+    # 支持 -y 或 --yes 参数，跳过确认
+    if '-y' in sys.argv or '--yes' in sys.argv:
         reset_all_words()
     else:
-        print("操作已取消。")
+        try:
+            confirm = input("⚠️  确定要重置所有学习进度吗？这将不可逆！(y/n): ")
+            if confirm.lower() == 'y':
+                reset_all_words()
+            else:
+                print("操作已取消。")
+        except EOFError:
+            print("\n❌ 错误：无法读取输入。")
+            print("💡 提示：在非交互式环境中，请使用 '-y' 参数：")
+            print("   python reset_learning.py -y")
+            sys.exit(1)
