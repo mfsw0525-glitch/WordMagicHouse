@@ -2,22 +2,17 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
-# Environments
-.env
-.venv
-env/
 venv/
-ENV/
-env.bak/
-venv.bak/
+.env
 
-# Database
-*.db
-*.sqlite3
-
-# DS Store
-.DS_Store
-
-# Streamlit
+# Streamlit secrets (VERY IMPORTANT)
 .streamlit/secrets.toml
+
+# Local databases and backups
+*.db
+*.xlsx
+*.csv
+!migrate_db_to_feishu.py # Keep the script but not the data
+
+# OS files
+.DS_Store
