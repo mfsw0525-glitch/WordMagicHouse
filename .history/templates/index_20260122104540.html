@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Word Magic</title>
+    
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Quicksand:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+    
+    <style>
+        /* --- 全局样式 --- */
+        body {
+            font-family: 'Quicksand', sans-serif;
+            background-color: #FDFBF7;
+            color: #4A5568;
+            min-height: 100vh;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        [v-cloak] { display: none !important; }
+        h1, h2, .font-title { font-family: 'Fredoka', sans-serif; }
+
+        /* --- 背景装饰 --- */
+        .blob {
+            position: absolute;
+            filter: blur(60px);
+            z-index: -1;
+            opacity: 0.5;
+            animation: float 10s infinite ease-in-out;
+        }
+        .blob-1 { top: -5%; left: -5%; width: 300px; height: 300px; background: #FFDEE9; }
+        .blob-2 { bottom: 5%; right: -5%; width: 250px; height: 250px; background: #B5FFFC; animation-delay: 2s; }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+
+        .app-container {
+            max-width: 700px;
+            margin: 0 auto;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: rgba(255, 255, 255, 0.4);
+            backdrop-filter: blur(8px);
+        }
+
+        /* --- 软按钮 --- */
+        .soft-btn {
+            background: #FFFFFF;
+            border: 2px solid #F3F4F6;
+            border-bottom-width: 6px;
+            border-radius: 24px;
+            color: #555;
+            transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+            user-select: none;
+        }
+        .soft-btn:active {
+            transform: translateY(4px);
+            border-bottom-width: 2px;
+            box-shadow: none;
+        }
+
+        /* --- 卡片状态 --- */
+        .game-card { font-size: 1.1rem; font-weight: 700; }
+        .game-card.selected {
+            background-color: #FFFBEB;
+            border-color: #FCD34D;
+            border-bottom-color: #D97706;
+            color: #D97706;
+            transform: translateY(2px);
+            border-bottom-width: 4px;
+        }
+        .game-card.correct {
+            background-color: #ECFDF5;
+            border-color: #34D399;
+            border-bottom-color: #059669;
+            color: #047857;
+            animation: pulse 0.5s;
+            pointer-events: none;
+        }
+        .game-card.wrong {
+            background-color: #FEF2F2;
+            border-color: #FDA4AF;
+            border-bottom-color: #E11D48;
+            color: #BE123C;
+            animation: headShake 0.4s;
+        }
+        .invisible-card { opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+
+        /* --- 🆕 拼写区域核心样式 --- */
+        .spelling-container {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            gap: 8px; /* 字母之间的间距 */
+            cursor: text;
+            padding: 10px;
+        }
+
+        /* 每一个字母的格子 (下划线风格) */
+        .letter-slot {
+            width: 40px;
+            height: 60px;
+            border-bottom: 4px solid #E2E8F0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            font-family: 'Fredoka', sans-serif;
+            color: #4A5568;
+            transition: all 0.2s;
+        }
+        
+        /* 激活状态 (光标所在位置) */
+        .letter-slot.active {
+            border-bottom-color: #A78BFA;
+            /* 模拟光标闪烁 */
+            animation: blink-border 1s infinite; 
+        }
+        
+        /* 已填入字母的状态 */
+        .letter-slot.filled {
+            border-bottom-color: #8B5CF6;
+        }
+
+        /* 错误震动 */
+        .spelling-container.shake-error .letter-slot {
+            border-bottom-color: #EF4444;
+            color: #EF4444;
+        }
+        .spelling-container.shake-error {
+            animation: shakeX 0.5s;
+        }
+
+        /* 隐藏的真实输入框 (覆盖在上面) */
+        .hidden-input {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0; /* 完全透明 */
+            cursor: text;
+            z-index: 10;
+            font-size: 1px; /* 防止手机键盘弹出时页面跳动 */
+        }
+
+        @keyframes blink-border {
+            0%, 100% { border-bottom-color: #A78BFA; }
+            50% { border-bottom-color: transparent; }
+        }
+
+        .hero-btn {
+            background: linear-gradient(135deg, #818cf8 0%, #6366f1 100%);
+            color: white;
+            border: none;
+            border-bottom: 6px solid #4338ca;
+            border-radius: 24px;
+        }
+        .hero-btn:active {
+            transform: translateY(4px);
+            border-bottom-width: 2px;
+        }
+        
+        /* 偷看答案按钮 */
+        .peek-btn {
+            background: #F3F4F6;
+            color: #9CA3AF;
+            border-radius: 20px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        .peek-btn:active { transform: scale(0.95); }
+    </style>
+</head>
+<body>
+
+<div class="blob blob-1"></div>
+<div class="blob blob-2"></div>
+
+<div id="app" v-cloak class="app-container p-6">
+    
+    <header class="flex justify-between items-center mb-6 pt-2">
+        <div class="flex items-center gap-3">
+            <div class="w-12 h-12 bg-gradient-to-br from-pink-300 to-purple-400 rounded-2xl flex items-center justify-center text-2xl shadow-lg text-white animate__animated animate__rubberBand">
+                🏰
+            </div>
+            <div>
+                <h1 class="text-2xl font-bold text-gray-700 leading-none">Word Magic</h1>
+                <span class="text-xs text-gray-400 font-bold tracking-wider">LEARNING IS FUN</span>
+            </div>
+        </div>
+        <button v-if="page !== 'home'" @click="goHome" class="w-10 h-10 bg-white rounded-full shadow-md text-gray-400 hover:text-indigo-500 transition flex items-center justify-center text-xl">
+            🏠
+        </button>
+    </header>
+
+    <div v-if="page === 'home'" class="flex-1 flex flex-col justify-center animate__animated animate__fadeIn">
+        <div class="grid grid-cols-2 gap-6 mb-8">
+            <div class="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100 text-center relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-full h-2 bg-blue-200"></div>
+                <div class="text-4xl mb-2">📚</div>
+                <div class="font-title text-3xl font-bold text-gray-800">{{ stats.total }}</div>
+                <div class="text-xs font-bold text-gray-400 uppercase">Words</div>
+            </div>
+            <div class="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100 text-center relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-full h-2 bg-green-200"></div>
+                <div class="text-4xl mb-2">🌱</div>
+                <div class="font-title text-3xl font-bold text-gray-800">{{ stats.new_words }}</div>
+                <div class="text-xs font-bold text-gray-400 uppercase">New</div>
+            </div>
+        </div>
+
+        <button @click="startLearning" class="hero-btn w-full py-6 text-xl font-bold flex items-center justify-center gap-3 mb-4 group">
+            <span class="text-3xl group-active:scale-90 transition">🚀</span>
+            Start Learning
+        </button>
+        <div class="text-center text-gray-300 font-bold text-sm mt-4">Review Mode Coming Soon...</div>
+    </div>
+
+    <div v-if="page === 'matching'" class="flex-1 flex flex-col animate__animated animate__fadeIn">
+        <div class="text-center mb-6">
+            <h2 class="text-xl font-bold text-gray-600 font-title mb-2">Match the Pairs! 🧩</h2>
+            <div class="w-48 mx-auto h-3 bg-gray-100 rounded-full overflow-hidden">
+                <div class="h-full bg-gradient-to-r from-green-300 to-green-500 transition-all duration-500" :style="{width: progressPercent + '%'}"></div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-12 flex-1 content-start px-2">
+            <div class="flex flex-col gap-4">
+                <div v-for="w in matchBatch" :key="'word-'+w.id" 
+                     @click="selectWord(w.id)"
+                     class="soft-btn game-card h-24 flex items-center justify-center p-2"
+                     :class="{
+                        'selected': selectedWordId === w.id,
+                        'correct': matchedIds.includes(w.id) && showSuccessAnim,
+                        'wrong': wrongPair[0] === w.id,
+                        'invisible-card': matchedIds.includes(w.id) && !showSuccessAnim
+                     }">
+                    {{ w.word }}
+                </div>
+            </div>
+            <div class="flex flex-col gap-4">
+                <div v-for="w in matchBatchShuffled" :key="'def-'+w.id"
+                     @click="checkMatch(w.id)"
+                     class="soft-btn game-card h-24 flex items-center justify-center p-2 text-sm leading-tight"
+                     :class="{
+                        'correct': matchedIds.includes(w.id) && showSuccessAnim,
+                        'wrong': wrongPair[1] === w.id,
+                        'invisible-card': matchedIds.includes(w.id) && !showSuccessAnim
+                     }">
+                    {{ w.definition }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div v-if="page === 'spelling'" class="flex-1 flex flex-col justify-center animate__animated animate__fadeIn">
+        <div class="text-center mb-6">
+            <span class="bg-indigo-50 text-indigo-500 px-4 py-1 rounded-full text-sm font-bold border border-indigo-100">
+                Word {{ 21 - remainingWords.length }} / 20
+            </span>
+        </div>
+
+        <div class="bg-white rounded-[2rem] p-8 shadow-sm border-2 border-indigo-50 text-center mb-8 relative">
+            <div class="text-6xl mb-4 animate__animated animate__tada">💡</div>
+            <div class="text-xl font-bold text-gray-700 font-title leading-relaxed">
+                {{ currentWord ? currentWord.definition : '' }}
+            </div>
+        </div>
+
+        <div class="spelling-container mb-8" :class="{ 'shake-error': isInputShaking }" @click="focusInput">
+            <div v-for="(char, index) in currentWordLength" :key="index"
+                 class="letter-slot"
+                 :class="{ 
+                     'active': index === userSpelling.length, 
+                     'filled': index < userSpelling.length
+                 }">
+                {{ getDisplayChar(index) }}
+            </div>
+
+            <input ref="spellInput" 
+                   v-model="userSpelling" 
+                   @keyup.enter="submitSpelling"
+                   type="text" 
+                   class="hidden-input"
+                   autocapitalize="off" autocomplete="off" autocorrect="off">
+        </div>
+
+        <div class="flex gap-3">
+            <button @click="revealAnswer" class="peek-btn w-16 h-16 flex items-center justify-center shadow-sm border-2 border-gray-100" title="Show Answer">
+                <span class="text-2xl">👁️</span>
+            </button>
+
+            <button @click="submitSpelling" class="hero-btn flex-1 h-16 text-xl font-bold shadow-lg flex items-center justify-center gap-2">
+                <span>✨</span> CHECK
+            </button>
+        </div>
+
+        <button v-if="spellingAttempt > 0" @click="nextSpellingWord" class="mt-6 text-gray-400 font-bold text-sm underline text-center w-full">
+            I don't know, skip ➡️
+        </button>
+    </div>
+
+    <div v-if="page === 'finished'" class="flex-1 flex flex-col items-center justify-center text-center animate__animated animate__bounceIn">
+        <div class="text-9xl mb-4">🏆</div>
+        <h2 class="text-4xl font-black text-gray-800 mb-4 font-title">Awesome!</h2>
+        <p class="text-gray-500 font-bold mb-8">You learned 20 words today!</p>
+        <button @click="goHome" class="soft-btn px-8 py-4 text-lg font-bold">Play Again</button>
+    </div>
+
+</div>
+
+<script>
+    const { createApp } = Vue
+
+    let audioCtx = null;
+    function initAudio() {
+        if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+        if (audioCtx.state === 'suspended') { audioCtx.resume(); }
+    }
+
+    function playSound(type) {
+        try {
+            initAudio();
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            if (type === 'correct') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1046.5, audioCtx.currentTime + 0.1);
+                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.5);
+            } else if (type === 'wrong' || type === 'spelling_wrong') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(50, audioCtx.currentTime + 0.3);
+                gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+            } else if (type === 'success') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(880, audioCtx.currentTime + 0.5);
+                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.5);
+            }
+        } catch(e) { console.log("Audio blocked"); }
+    }
+
+    const app = createApp({
+        data() {
+            return {
+                page: 'home',
+                stats: { total: 0, new_words: 0 },
+                queue: [],
+                progressMap: {},
+                
+                matchBatch: [],
+                matchBatchShuffled: [],
+                selectedWordId: null,
+                matchedIds: [],
+                wrongPair: [],
+                showSuccessAnim: false,
+
+                currentWord: null,
+                currentHintMask: [], // 记录哪些位置显示提示字母
+                userSpelling: '',
+                spellingAttempt: 0,
+                isInputShaking: false
+            }
+        },
+        computed: {
+            progressPercent() {
+                if(this.queue.length === 0) return 0;
+                const done = this.queue.filter(w => this.progressMap[w.id] >= 1).length;
+                return (done / this.queue.length) * 100;
+            },
+            remainingWords() {
+                return this.queue.filter(w => this.progressMap[w.id] < 2);
+            },
+            currentWordLength() {
+                return this.currentWord ? this.currentWord.word.length : 0;
+            }
+        },
+        mounted() {
+            this.fetchStats();
+            document.addEventListener('click', initAudio, { once: true });
+        },
+        methods: {
+            async fetchStats() {
+                try {
+                    const res = await fetch('/api/stats');
+                    this.stats = await res.json();
+                } catch(e) {}
+            },
+            async startLearning() {
+                const res = await fetch('/api/new_words');
+                const words = await res.json();
+                if(words.length === 0) { alert("No new words!"); return; }
+                this.queue = words;
+                this.progressMap = {};
+                words.forEach(w => this.progressMap[w.id] = 0);
+                this.startMatchingPhase();
+            },
+            goHome() {
+                this.page = 'home';
+                this.fetchStats();
+            },
+
+            // --- 配对逻辑 ---
+            startMatchingPhase() { this.page = 'matching'; this.refillMatchBatch(); },
+            refillMatchBatch() {
+                const needMatch = this.queue.filter(w => this.progressMap[w.id] < 1);
+                if(needMatch.length === 0) { playSound('success'); this.startSpellingPhase(); return; }
+                this.matchBatch = this.matchBatch.filter(w => this.progressMap[w.id] < 1);
+                while(this.matchBatch.length < 4) {
+                    const candidates = needMatch.filter(w => !this.matchBatch.find(b => b.id === w.id));
+                    if(candidates.length === 0) break;
+                    this.matchBatch.push(candidates[Math.floor(Math.random() * candidates.length)]);
+                }
+                this.matchBatchShuffled = [...this.matchBatch].sort(() => Math.random() - 0.5);
+                this.matchedIds = [];
+            },
+            selectWord(id) {
+                if(this.matchedIds.includes(id)) return;
+                this.selectedWordId = (this.selectedWordId === id) ? null : id;
+                this.wrongPair = [];
+            },
+            checkMatch(defId) {
+                if(!this.selectedWordId) return;
+                if(this.selectedWordId === defId) {
+                    playSound('correct');
+                    this.matchedIds.push(defId);
+                    this.progressMap[defId]++;
+                    this.selectedWordId = null;
+                    this.showSuccessAnim = true;
+                    setTimeout(() => { this.showSuccessAnim = false; this.refillMatchBatch(); }, 600);
+                } else {
+                    playSound('wrong');
+                    this.wrongPair = [this.selectedWordId, defId];
+                    setTimeout(() => {
+                        this.progressMap[this.selectedWordId] = 0;
+                        this.progressMap[defId] = 0;
+                        this.selectedWordId = null;
+                        this.wrongPair = [];
+                    }, 600);
+                }
+            },
+
+            // --- 拼写逻辑 ---
+            startSpellingPhase() { this.page = 'spelling'; this.nextSpellingWord(); },
+            
+            nextSpellingWord() {
+                const remaining = this.queue.filter(w => this.progressMap[w.id] < 2);
+                if(remaining.length === 0) { this.finishSession(); return; }
+                this.currentWord = remaining[Math.floor(Math.random() * remaining.length)];
+                this.spellingAttempt = 0;
+                this.userSpelling = '';
+                this.isInputShaking = false;
+                this.generateHintMask(); // 生成提示位
+                this.$nextTick(() => { this.focusInput(); });
+            },
+
+            focusInput() {
+                if(this.$refs.spellInput) this.$refs.spellInput.focus();
+            },
+
+            // 生成提示掩码：决定哪些位置显示提示字母
+            generateHintMask() {
+                const len = this.currentWord.word.length;
+                this.currentHintMask = new Array(len).fill(false);
+                
+                // 30% 概率不给提示，70% 概率给随机提示
+                if (len > 3 && Math.random() > 0.3) {
+                    const numReveal = Math.floor(Math.random() * (len / 2)) + 1;
+                    let count = 0;
+                    while(count < numReveal) {
+                        const idx = Math.floor(Math.random() * len);
+                        if (!this.currentHintMask[idx]) {
+                            this.currentHintMask[idx] = true;
+                            count++;
+                        }
+                    }
+                }
+            },
+
+            // 获取某个格子应该显示的字符
+            getDisplayChar(index) {
+                // 1. 如果用户输入了这个位置，显示用户输入的
+                if (index < this.userSpelling.length) {
+                    return this.userSpelling[index];
+                }
+                // 2. 如果没输入，但有提示掩码，显示提示字母 (幽灵态？这里直接显示)
+                // 注意：这里我们让提示字母也作为“未填写的”提示，不占位
+                // 但为了让孩子照着打，可以显示。
+                if (this.currentHintMask[index]) {
+                    return this.currentWord.word[index];
+                }
+                return '';
+            },
+
+            // 偷看答案
+            revealAnswer() {
+                this.userSpelling = this.currentWord.word;
+                this.focusInput();
+            },
+
+            async submitSpelling() {
+                if(!this.userSpelling) return;
+                this.isInputShaking = false;
+
+                if(this.userSpelling.trim().toLowerCase() === this.currentWord.word.toLowerCase()) {
+                    playSound('correct');
+                    if(this.spellingAttempt === 0) this.progressMap[this.currentWord.id] = 2; 
+                    else this.progressMap[this.currentWord.id]++;
+                    
+                    await fetch('/api/update_progress', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ word_id: this.currentWord.id, success: true })
+                    });
+                    this.nextSpellingWord();
+                } else {
+                    playSound('spelling_wrong');
+                    this.spellingAttempt++;
+                    this.progressMap[this.currentWord.id] = 0;
+                    this.isInputShaking = true;
+                    setTimeout(() => {
+                        this.isInputShaking = false;
+                        this.userSpelling = ''; // 错后清空，让孩子重打
+                        this.focusInput();
+                    }, 500);
+                }
+            },
+            finishSession() { playSound('success'); this.page = 'finished'; }
+        }
+    });
+
+    app.mount('#app');
+</script>
+</body>
+</html>
