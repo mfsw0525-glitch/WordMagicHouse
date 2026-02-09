@@ -67,6 +67,12 @@ class LearningEngine:
         Update local session mastery and ASYNC Feishu sync.
         Saves progress immediately in the background for "done" words.
         """
+        # Defensive check: If state is lost during update, recover gracefully
+        if word_id not in self.mastery_map:
+            self.mastery_map[word_id] = 0
+        if word_id not in self.wrong_history:
+            self.wrong_history[word_id] = 0
+
         word_obj = next((w for w in self.session_words if w['id'] == word_id), None)
         current_interval = word_obj.get('interval', 0) if word_obj else 0
 

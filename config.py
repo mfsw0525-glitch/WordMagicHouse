@@ -20,7 +20,7 @@ FEISHU_USER_STATS_TABLE_ID = get_secret("FEISHU_USER_STATS_TABLE_ID", "")
 FEISHU_WEBHOOK = get_secret("FEISHU_WEBHOOK", "")
 
 # --- Learning Settings ---
-WORDS_PER_SESSION = 30
+WORDS_PER_SESSION = 20
 
 # --- Ebbinghaus Intervals (Days) ---
 REVIEW_INTERVALS = [1, 2, 4, 7, 15, 30]
