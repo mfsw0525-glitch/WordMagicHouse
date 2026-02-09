@@ -177,24 +177,17 @@ def learning_page():
                  return
 
     # Input Area
-    if q_type == 'choice':
-        st.markdown('<div class="center-text">Which word is this?</div>', unsafe_allow_html=True)
+    if q_type == 'choice' or q_type == 'matching':
+        label = "Which word is this?" if q_type == 'choice' else "Match the correct word!"
+        st.markdown(f'<div class="center-text">{label}</div>', unsafe_allow_html=True)
         st.write("")
         cols = st.columns([1, 2, 2, 1])
         for i, opt in enumerate(q['options']):
             col_idx = 1 if i % 2 == 0 else 2
             with cols[col_idx]:
-                if st.button(opt['word'], key=f"opt_{i}", use_container_width=True):
-                    check_answer(word['id'], opt['id'])
-                    
-    elif q_type == 'matching': # Fallback to choice
-        st.markdown('<div class="center-text">Match the correct word!</div>', unsafe_allow_html=True)
-        st.write("")
-        cols = st.columns([1, 2, 2, 1])
-        for i, opt in enumerate(q['options']):
-            col_idx = 1 if i % 2 == 0 else 2
-            with cols[col_idx]:
-                if st.button(opt['word'], key=f"match_{i}", use_container_width=True):
+                # Unique key prevents iPad focus/visual carryover
+                btn_key = f"q_{word['id']}_{opt['id']}_{i}"
+                if st.button(opt['word'], key=btn_key, use_container_width=True):
                     check_answer(word['id'], opt['id'])
 
     elif q_type.startswith('spelling'):

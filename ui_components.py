@@ -69,11 +69,23 @@ def inject_custom_css():
             font-weight: 700 !important;
             padding: 10px 20px !important;
             transition: all 0.2s ease !important;
+            -webkit-tap-highlight-color: transparent; /* Remove highlight on mobile */
         }
-        .stButton > button:hover {
-            background: {{THEME_TEXT_PRIMARY}} !important;
+        
+        /* Only apply hover on devices that support it to avoid iPad coloring issues */
+        @media (hover: hover) {
+            .stButton > button:hover {
+                background: {{THEME_TEXT_PRIMARY}} !important;
+                color: #FFFFFF !important;
+                transform: translateY(-2px);
+            }
+        }
+        
+        .stButton > button:active, .stButton > button:focus {
+            background: {{THEME_COLOR_PRIMARY}} !important;
             color: #FFFFFF !important;
-            transform: translateY(-2px);
+            outline: none !important;
+            box-shadow: none !important;
         }
         
         /* Hide Streamlit Branding */
